@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Well let's go</title>
+</head>
+<body>
+
+    <header>
+        <img class="random" src="truddy_board.png" alt="">
+        <p>~ yeah right, I'm about to ping <strong>the fuck out</strong> of you</p>
+    </header>
+    <div class="box">
+        <h1>Ping-oo</h1>
+        <nav>
+            <a data-to="about">About</a>
+            <a data-to="connect">Test 1</a>
+            <a data-to="rec">Test 2</a>
+        </nav>
+
+        <div data-sec="about">
+            <h2>About</h2>
+            <p>I need to create a proof of concept for a site that will use bidirectional connections from the client to the server.</p>
+            <p><b>Client:</b> sends a ping at most twice per minute to the server.</p>
+            <p><b>Server:</b> The client awaits pings from other users, which is delivered by the server.</p>
+            <h3>Why?</h3>
+            <p>I'm too poor to buy a VPS plan just for one small project, so I need to figure out how to make something that allows me to simulate websockets on a shared hosting environment.</p>
+            <h3>How?</h3>
+            <p>Since the client doesn't send much, I'll use SSE to send the data to the client, and then the client can send the data to the server by interrupting this SSE.</p>
+            <p>So I'm trying to achieve bidirection by closing the connection from the client when the client wants to send something. I don't know if this will work, but let's try.</p>
+        </div>
+
+        <div data-sec="connect">
+            <h2>Test 1: Simple connect</h2>
+            <p>Click the button to establish an SSE connection, and print 3 messages from the server.</p>
+            <p>Once it is done, the client auto reconnects and tries again.</p>
+            <p>
+                <button id="start">Start</button>
+                <button id="stop" disabled>Stop</button>
+            </p>
+            <ul id="resp"></ul>
+        </div>
+
+        <div data-sec="rec">
+            <h2>Test 2: </h2>
+        </div>
+
+    </div>
+    <footer>
+
+    </footer>
+
+    <style>
+        body{
+            font-family: sans-serif;
+            font-size: 1.2rem;
+            max-width: 700px;
+            margin: 0 auto;
+            color: rgb(80, 77, 87);
+            background-color: rgb(242, 241, 241)
+        }
+
+        .box{
+            background-color: white;
+            padding: 1.5rem 3rem;
+            border-radius: 5px;
+            box-shadow: 0.1em 0.1em 0.6em rgba(0,0,0,0.1);
+        }
+        
+        ul{
+            display: flex;
+            flex-direction: column-reverse;
+            list-style: none;
+            font-family:  monospace;
+            background-color: black;
+            color: greenyellow;
+            padding: 1em;
+            border-radius: 5px;
+        }
+
+        ul hr{
+            display: block;
+            background-color: greenyellow;
+            height: 0.12em;
+            border: none;
+            width: 100%;
+            border-radius: 10px;
+            opacity: 0.5;
+        }
+
+        header{
+            display: flex;
+            align-items: flex-end;
+            font-size: 0.8em;
+            color: rgb(235, 89, 103);
+        }
+
+        footer{
+            font-size: 0.8em;
+            opacity: 0.5;
+            max-width: 400px;
+            text-align: center;
+            margin: 2em auto
+        }
+
+        img.random{
+            max-width: 400px;
+            display: block;
+            width: 80%;
+            flex-shrink: 0;
+        }
+
+        h1{
+            margin-bottom: 0.5em;
+        }
+
+        nav{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1em;
+            margin-bottom: 2em;
+            font-weight: bold;
+        }
+
+        nav a{
+            display: inline-block;
+            color: rgb(235, 89, 103);
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        nav a:hover{
+            text-decoration: underline;
+        }
+
+    </style>
+
+    <script>
+        // Some stuff for page setup
+        const nav = document.querySelectorAll('[data-to]');
+        const sections = document.querySelectorAll('[data-sec]');
+
+        sections.forEach(s => {
+            if (s.getAttribute('data-sec') == 'about') {
+                s.style.display = 'block';
+            } else {
+                s.style.display = 'none';
+            }
+        });
+
+        nav.forEach(n => {
+            n.addEventListener('click', function() {
+                sections.forEach(s => {
+                    if (s.getAttribute('data-sec') == this.getAttribute('data-to')) {
+                        s.style.display = 'block';
+                    } else {
+                        s.style.display = 'none';
+                    }
+                });
+            });
+        });
+    </script>
+
+    <script>
+        const start_b = document.getElementById('start');
+        const stop_b = document.getElementById('stop');
+        const resp = document.getElementById('resp');
+
+        let evtSource = null;
+
+        start_b.addEventListener('click', function() {
+            start_b.disabled = true;
+            stop_b.disabled = null;
+
+            // if resp not empty, add a line break
+            if(resp.innerHTML != '') resp.innerHTML += '<hr>';
+
+            // Close previous connection if any
+            if (evtSource != null) evtSource.close();
+
+            // Create new connection
+            evtSource = new EventSource('api/sse.php');
+
+            evtSource.addEventListener('message', e => {
+                let r = document.createElement('li');
+                r.innerHTML = e.data;
+                resp.appendChild(r);
+            }, false);
+
+            evtSource.addEventListener('open', e => {
+                let r = document.createElement('li');
+                r.innerHTML = '<b>Client Hello</b>';
+                resp.appendChild(r);
+                stop_b.disabled = null;
+                start_b.disabled = true;
+            }, false);
+
+            evtSource.addEventListener('error', e => {
+                let r = document.createElement('li');
+                r.innerHTML = '<b>Connection ended. Auto retrying in a bit...</b>';
+                resp.appendChild(r);
+
+                stop_b.disabled = null;
+                start_b.disabled = true;
+            }, false);
+
+        });
+
+        stop_b.addEventListener('click', function() {
+            start_b.disabled = null;
+            stop_b.disabled = true;
+            evtSource.close();
+            let r = document.createElement('li');
+            r.innerHTML = '<b>Connection closed by client</b>';
+            resp.appendChild(r);
+        });
+    </script>
+    
+</body>
+</html>
