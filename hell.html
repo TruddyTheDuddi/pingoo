@@ -16,8 +16,10 @@
         <h1>Ping-oo</h1>
         <nav>
             <a data-to="about">About</a>
-            <a data-to="connect">Test 1</a>
-            <a data-to="rec">Test 2</a>
+            <a data-to="connect">1. Simple SSE</a>
+            <a data-to="rec">2. SSE & AJAX</a>
+            <a data-to="db">3. Ping count</a>
+            <a href="bbq.html" title="COMING SOON! This is going to be the barebone implementation of the thing I need the SSE stuff for.">Final Test</a>
         </nav>
 
         <div data-sec="about">
@@ -30,6 +32,7 @@
             <h3>How?</h3>
             <p>Since the client doesn't send much, I'll use SSE to send the data to the client, and then the client can send the data to the server by interrupting this SSE.</p>
             <p>So I'm trying to achieve bidirection by closing the connection from the client when the client wants to send something. I don't know if this will work, but let's try.</p>
+            <p class="note">Well, here is future me. It works locally! Time to test it live :)</p>
         </div>
 
         <div data-sec="connect">
@@ -44,7 +47,36 @@
         </div>
 
         <div data-sec="rec">
-            <h2>Test 2: </h2>
+            <h2>Test 2: Permanent SSE with AJAX reqs</h2>
+            <p>Testing if the client can initiate an SSE connection with Script 1 and send data to Script 2 over AJAX at the same time.</p>
+            <p>Start the SSE with Script 1 and then click the button to send a message to the Script 2. There is no communication between the two scripts</p>
+            <small>
+                <p>
+                    If the ajax is not completed (you should see 2/2), then you cannot send AJAX while the SSE is maintained.
+                </p>
+                <p>
+                    Previously, I tried using session variables, but it seems that the session is either not shared between the two scripts, or the AJAX script is blocked.
+                </p>
+            </small>
+            <p>
+                <button id="start2">Start</button>
+                <button id="stop2" disabled>Stop</button>
+                <button id="send2">Send trash</button>
+            </p>
+            <ul id="resp2"></ul>
+            <p class="note"><b>Heck yeah! Works!</b> No need to cancel the SSE connection I suppose? But sessions definitely don't work, I need to use DBs</p>
+        </div>
+
+        <div data-sec="db">
+            <h2>Test 3: Cross script communication</h2>
+            <p>Testing if Script 1 that has opened the SSE connection can update data given context from the Script 2.</p>
+            <p>Start the SSE with Script 1 and then click the button to increment the pings! You can also jsut lurk and wait until others press the button!</p>
+            <p>
+                <button id="start3">Start</button>
+                <button id="stop3" disabled>Stop</button>
+                <button id="send3">Add +1</button>
+            </p>
+            <ul id="resp3"></ul>
         </div>
 
     </div>
@@ -64,9 +96,8 @@
 
         .box{
             background-color: white;
-            padding: 1.5rem 3rem;
+            padding: 1rem 2.3rem;
             border-radius: 5px;
-            box-shadow: 0.1em 0.1em 0.6em rgba(0,0,0,0.1);
         }
         
         ul{
@@ -93,8 +124,8 @@
         header{
             display: flex;
             align-items: flex-end;
-            font-size: 0.8em;
-            color: rgb(235, 89, 103);
+            color: rgba(0,0,0,0.3);
+            margin: 1em 1em 0 1em;
         }
 
         footer{
@@ -134,6 +165,13 @@
         nav a:hover{
             text-decoration: underline;
         }
+        
+        .note{
+            margin-top: 1em;
+            background-color: rgb(232, 201, 101);
+            padding: 0.8em;
+            border-left: 5px solid rgb(214, 158, 78);
+        }
 
     </style>
 
@@ -168,8 +206,15 @@
         const stop_b = document.getElementById('stop');
         const resp = document.getElementById('resp');
 
+        // Bad but who cares
+        const start_b2 = document.getElementById('start2');
+        const stop_b2 = document.getElementById('stop2');
+        const send_b2 = document.getElementById('send2');
+        const resp2 = document.getElementById('resp2');
+
         let evtSource = null;
 
+        // Test 1
         start_b.addEventListener('click', function() {
             start_b.disabled = true;
             stop_b.disabled = null;
@@ -181,7 +226,7 @@
             if (evtSource != null) evtSource.close();
 
             // Create new connection
-            evtSource = new EventSource('api/sse.php');
+            evtSource = new EventSource('api/test1/sse.php');
 
             evtSource.addEventListener('message', e => {
                 let r = document.createElement('li');
@@ -216,6 +261,140 @@
             r.innerHTML = '<b>Connection closed by client</b>';
             resp.appendChild(r);
         });
+
+
+        // Test 2
+        start_b2.addEventListener('click', function() {
+            start_b2.disabled = true;
+            stop_b2.disabled = null;
+
+            // If resp not empty, add a line break
+            if(resp2.innerHTML != '') resp2.innerHTML += '<hr>';
+
+            // Close previous connection if any
+            if (evtSource != null) evtSource.close();
+
+            // Create new connection
+            evtSource = new EventSource('api/test2/sse.php');
+
+            evtSource.addEventListener('message', e => {
+                let r = document.createElement('li');
+                r.innerHTML = e.data;
+                resp2.appendChild(r);
+            }, false);
+
+            evtSource.addEventListener('open', e => {
+                let r = document.createElement('li');
+                r.innerHTML = '<b>Client Hello</b>';
+                resp2.appendChild(r);
+                stop_b2.disabled = null;
+                start_b2.disabled = true;
+            }, false);
+
+            evtSource.addEventListener('error', e => {
+                let r = document.createElement('li');
+                r.innerHTML = '<b>Connection ended. Auto retrying in a bit...</b>';
+                resp2.appendChild(r);
+
+                stop_b2.disabled = null;
+                start_b2.disabled = true;
+            }, false);
+
+        });
+
+        send_b2.addEventListener('click', function() {
+            let r = document.createElement('li');
+            r.innerHTML = '<b>Client > Sending to Script 2 (1/2)</b>';
+            resp2.appendChild(r);
+
+            // Send ajax to "api/send_ping.php", when completed add a line to resp2
+            fetch('api/test2/send_trash.php')
+                .then(response => response.text())
+                .then(d => {
+                    let r = document.createElement('li');
+                    r.innerHTML = d;
+                    resp2.appendChild(r);
+                });
+        });
+
+        stop_b2.addEventListener('click', function() {
+            start_b2.disabled = null;
+            stop_b2.disabled = true;
+            evtSource.close();
+            let r = document.createElement('li');
+            r.innerHTML = '<b>Connection Server closed by client</b>';
+            resp2.appendChild(r);
+        });
+
+        // Test 3
+        const start_b3 = document.getElementById('start3');
+        const stop_b3 = document.getElementById('stop3');
+        const send_b3 = document.getElementById('send3');
+        const resp3 = document.getElementById('resp3');
+
+        start_b3.addEventListener('click', function() {
+            start_b3.disabled = true;
+            stop_b3.disabled = null;
+
+            // If resp not empty, add a line break
+            if(resp3.innerHTML != '') resp3.innerHTML += '<hr>';
+
+            // Close previous connection if any
+            if (evtSource != null) evtSource.close();
+
+            // Create new connection
+            evtSource = new EventSource('api/test3/sse.php');
+
+            evtSource.addEventListener('message', e => {
+                let r = document.createElement('li');
+                r.innerHTML = e.data;
+                resp3.appendChild(r);
+            }, false);
+
+            evtSource.addEventListener('open', e => {
+                let r = document.createElement('li');
+                r.innerHTML = '<b>Client Hello</b>';
+                resp3.appendChild(r);
+                stop_b3.disabled = null;
+                start_b3.disabled = true;
+            }, false);
+
+            evtSource.addEventListener('error', e => {
+                let r = document.createElement('li');
+                r.innerHTML = '<b>Connection ended. Auto retrying in a bit...</b>';
+                resp3.appendChild(r);
+
+                stop_b3.disabled = null;
+                start_b3.disabled = true;
+            }, false);
+
+        });
+
+        send_b3.addEventListener('click', function() {
+            let r = document.createElement('li');
+            r.innerHTML = '<b>Client > Pinging...</b>';
+            resp3.appendChild(r);
+
+            send_b3.disabled = true;
+            fetch('api/test3/send_ping.php')
+                .then(response => response.text())
+                .then(d => {
+                    let r = document.createElement('li');
+                    r.innerHTML = d;
+                    resp3.appendChild(r);
+                    send_b3.disabled = null;
+                });
+        });
+
+        stop_b3.addEventListener('click', function() {
+            start_b3.disabled = null;
+            stop_b3.disabled = true;
+            evtSource.close();
+            let r = document.createElement('li');
+            r.innerHTML = '<b>Connection Server closed by client</b>';
+            resp3.appendChild(r);
+        });
+
     </script>
     
 </body>
